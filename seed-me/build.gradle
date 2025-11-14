@@ -21,9 +21,9 @@ apply plugin:"maven-publish"
 apply plugin:"java-library"
 
 ext {
-  grailsVersion = project.grailsVersion
-  isBuildSnapshot = version.endsWith('-SNAPSHOT')
-  isReleaseVersion = !isBuildSnapshot
+    grailsVersion = project.grailsVersion
+    isBuildSnapshot = version.endsWith('-SNAPSHOT')
+    isReleaseVersion = !isBuildSnapshot
 }
 
 repositories {
@@ -52,6 +52,7 @@ dependencies {
     implementation platform("org.apache.grails:grails-bom:$grailsVersion")
     // implementation 'javax.servlet:javax.servlet-api:3.1.0'
     implementation "com.h2database:h2"
+    implementation "org.apache.grails:grails-async:7.0.0"
     api 'commons-io:commons-io:2.20.0'
     api 'org.yaml:snakeyaml:2.3'
     console "org.apache.grails:grails-console"
