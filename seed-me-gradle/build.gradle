@@ -1,37 +1,12 @@
-buildscript {
+apply plugin: 'com.gradle.plugin-publish'
+apply plugin: 'groovy'
+apply plugin: 'java-library'
 
-    repositories {
-        mavenLocal()
-        maven { url "https://repo.grails.org/grails/restricted" }
-    }
-    dependencies {
-    }
-}
-group "com.bertramlabs.plugins"
-
-apply plugin:"eclipse"
-apply plugin:"groovy"
-apply plugin:"idea"
-apply plugin:"maven-publish"
-apply plugin:"java-library"
+group = 'cloud.wondrify'
 
 ext {
-  isBuildSnapshot = version.endsWith('-SNAPSHOT')
-  isReleaseVersion = !isBuildSnapshot
-}
-
-repositories {
-    mavenLocal()
-    maven { url "https://repo.grails.org/grails/restricted" }
-}
-
-
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
-    }
-    withSourcesJar()
-    withJavadocJar()
+    pomDescription = 'JVM Seed Me Gradle Adapter.'
+    pomMavenPublicationName = 'pluginMaven'
 }
 
 dependencies {
@@ -40,51 +15,9 @@ dependencies {
 }
 
 
-publishing {
-    publications {
-        maven(MavenPublication) {
-            artifactId 'seed-me-gradle'
-            pom.withXml {
-                asNode().children().last() + {
-                    resolveStrategy = Closure.DELEGATE_FIRST
-                    name 'Seed Me Gradle Plugin'
-                    description 'Implements a standard convention for adding seed data to your Grails application.'
-                    url 'https://github.com/bertramdev/seed-me'
-                    scm {
-                        url 'https://github.com/bertramdev/seed-me'
-                        connection 'scm:https://bertramdev@github.com/bertramdev/seed-me.git'
-                        developerConnection 'scm:git://github.com/bertramdev/seed-me.git'
-                    }
-                    licenses {
-                        license {
-                            name 'The Apache Software License, Version 2.0'
-                            url 'http://www.apache.org/license/LICENSE-2.0.txt'
-                            distribution 'repo'
-                        }
-                    }
-                    developers {
-                        developer {
-                            id 'davydotcom'
-                            name 'David Estes'
-                            email 'davydotcom@gmail.com'
-                        }
-                    }
-                }
-            }
-            from components.java
-        }
-    }
-    repositories {
-        maven {
-            if( !isReleaseVersion ) {
-                url = "https://nexus.bertramlabs.com/content/repositories/snapshots"
-                if(project.hasProperty('labsNexusUser')) {
-                    credentials {
-                        username = labsNexusUser
-                        password = labsNexusPassword
-                    }
-                }
-            }
-        }
-    }
+
+
+apply {
+    from rootProject.layout.projectDirectory.file('gradle/java-config.gradle')
+    from rootProject.layout.projectDirectory.file('gradle/publish-config.gradle')
 }

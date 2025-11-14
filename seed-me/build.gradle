@@ -1,46 +1,26 @@
-buildscript {
-    ext {
-        grailsVersion = project.grailsVersion
-    }
-    repositories {
-        mavenLocal()
-        mavenCentral()
-        maven { url "https://plugins.gradle.org/m2/" }
-        maven { url "https://repo.grails.org/grails/restricted" }
-    }
-    dependencies {
-        classpath "org.apache.grails:grails-gradle-plugins:$grailsVersion"
-    }
-}
-group "com.bertramlabs.plugins"
+apply plugin: 'groovy'
+apply plugin: 'java-library'
 
-apply plugin:"eclipse"
-apply plugin:"idea"
-apply plugin: "org.apache.grails.gradle.grails-plugin"
-apply plugin:"maven-publish"
-apply plugin:"java-library"
+group = 'cloud.wondrify'
 
 ext {
-    grailsVersion = project.grailsVersion
-    isBuildSnapshot = version.endsWith('-SNAPSHOT')
-    isReleaseVersion = !isBuildSnapshot
+    pomDescription = 'Implements a standard convention for adding seed data to your Grails application.'
 }
 
-repositories {
-    mavenLocal()
-    mavenCentral()
-    maven { url "https://repo.grails.org/grails/restricted" }
+configurations {
+    provided
+    doc.extendsFrom(runtime)
 }
 
-
-
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+sourceSets {
+    main {
+        compileClasspath += configurations.provided
+        groovy.srcDirs += ['src/main/java']
+        java.srcDirs = []
     }
-    withSourcesJar()
-    withJavadocJar()
 }
+
+
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-logging'
@@ -55,7 +35,6 @@ dependencies {
     implementation "org.apache.grails:grails-async:7.0.0"
     api 'commons-io:commons-io:2.20.0'
     api 'org.yaml:snakeyaml:2.3'
-    console "org.apache.grails:grails-console"
     api "org.apache.grails:grails-domain-class"
     testImplementation "org.apache.grails:grails-testing-support-datamapping"
     testImplementation "org.mockito:mockito-core"
@@ -63,51 +42,8 @@ dependencies {
 }
 
 
-publishing {
-    publications {
-        maven(MavenPublication) {
-            artifactId 'seed-me'
-            pom.withXml {
-                asNode().children().last() + {
-                    resolveStrategy = Closure.DELEGATE_FIRST
-                    name 'Seed Me'
-                    description 'Implements a standard convention for adding seed data to your Grails application.'
-                    url 'https://github.com/bertramdev/seed-me'
-                    scm {
-                        url 'https://github.com/bertramdev/seed-me'
-                        connection 'scm:https://bertramdev@github.com/bertramdev/seed-me.git'
-                        developerConnection 'scm:git://github.com/bertramdev/seed-me.git'
-                    }
-                    licenses {
-                        license {
-                            name 'The Apache Software License, Version 2.0'
-                            url 'https://www.apache.org/licenses/LICENSE-2.0.txt'
-                            distribution 'repo'
-                        }
-                    }
-                    developers {
-                        developer {
-                            id 'davydotcom'
-                            name 'David Estes'
-                            email 'davydotcom@gmail.com'
-                        }
-                    }
-                }
-            }
-            from components.java
-        }
-    }
-    repositories {
-        maven {
-            if( !isReleaseVersion ) {
-                url = "https://nexus.bertramlabs.com/content/repositories/snapshots"
-                if(project.hasProperty('labsNexusUser')) {
-                    credentials {
-                        username = labsNexusUser
-                        password = labsNexusPassword
-                    }
-                }
-            }
-        }
-    }
+apply {
+    from rootProject.layout.projectDirectory.file('gradle/java-config.gradle')
+    from rootProject.layout.projectDirectory.file('gradle/publish-config.gradle')
 }
+
