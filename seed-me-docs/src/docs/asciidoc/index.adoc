@@ -1,0 +1,208 @@
+= SeedMe Documentation
+:toc: left
+:toclevels: 3
+:source-highlighter: coderay
+:icons: font
+
+== Introduction
+
+SeedMe is a Grails plugin that provides an easy and elegant way to seed your database with configuration and test data. It supports both Groovy DSL and YAML syntax for defining seed data, making it flexible and developer-friendly.
+
+=== Key Features
+
+* *Dual Syntax Support*: Write seed files in Groovy DSL or YAML format
+* *Smart Updates*: Only runs seeds that haven't been processed (checksum-based)
+* *Environment-Specific Seeds*: Automatically load seeds for specific Grails environments
+* *Association Support*: Easy handling of domain relationships (belongsTo, hasMany, etc.)
+* *Flexible Key Matching*: Control how records are found and updated via meta properties
+* *Plugin Support*: Load seeds from your application and all included plugins
+* *Integration Test Support*: Use the same DSL directly in your tests
+* *Dependency Ordering*: Control seed load order across files and plugins
+
+=== Supported Grails Versions
+
+* *Grails 7+*: Full support (version 7.0.0+)
+* *Grails 5*: Supported (version 5.0.0)
+* *Grails 4*: Supported (version 4.1.6+)
+
+== Getting Started with Grails 7
+
+=== Installation
+
+Add the SeedMe plugin to your Grails 7 application:
+
+*build.gradle*
+[source,groovy]
+----
+buildscript {
+    dependencies {
+        classpath 'com.bertramlabs.plugins:seed-me-gradle:7.0.0'
+    }
+}
+
+apply plugin: "seed-me-gradle"
+
+dependencies {
+    runtimeOnly 'com.bertramlabs.plugins:seed-me:7.0.0'
+}
+----
+
+=== Configuration
+
+SeedMe works out of the box without configuration, but you can customize its behavior:
+
+*grails-app/conf/application.groovy* (or *application.yml*)
+[source,groovy]
+----
+grails.plugin.seed.autoSeed = false              // Auto-run seeds at startup
+grails.plugin.seed.skipPlugins = false           // Skip plugin seeds
+grails.plugin.seed.excludedPlugins = []          // Plugins to exclude
+grails.plugin.seed.excludedSeedFiles = []        // Seed files to exclude
+grails.plugin.seed.root = 'src/seed'             // Seed directory location
+grails.plugin.seed.metaKey = 'meta'              // Key for meta information
+grails.plugin.seed.environment = '[environment]' // Override environment
+----
+
+=== Project Structure
+
+SeedMe looks for seed files in the following locations:
+
+[source]
+----
+your-app/
+├── src/
+│   └── seed/                    # Main seed directory
+│       ├── Authors.groovy       # Root level seed files
+│       ├── Books.yaml           # YAML seed files
+│       ├── development/         # Development-only seeds
+│       │   └── TestData.groovy
+│       ├── production/          # Production-only seeds
+│       │   └── InitialData.groovy
+│       └── templates/           # Reserved for template files
+│           └── LargeBlob.txt
+----
+
+*Environment-specific seeds*: Files in a folder matching your environment name (e.g., `development/`, `production/`, `test/`) or `env-${environment}/` will only be loaded in that environment.
+
+=== Running Seeds
+
+Seeds can be run in several ways:
+
+*1. Automatic at Startup*
+[source,groovy]
+----
+// application.groovy
+grails.plugin.seed.autoSeed = true
+----
+
+Or use the system property:
+[source,bash]
+----
+grails run-app -DautoSeed=true
+----
+
+*2. Manual via Service*
+[source,groovy]
+----
+// In a controller, service, or BootStrap
+class BootStrap {
+    def seedService
+    
+    def init = { servletContext ->
+        seedService.installSeedData()
+    }
+}
+----
+
+== Quick Start Examples
+
+=== Groovy DSL Example
+
+Create a file `src/seed/Authors.groovy`:
+
+[source,groovy]
+----
+seed = {
+    // Simple domain seed
+    author(meta: [key: 'username'], 
+           username: 'john.doe', 
+           name: 'John Doe', 
+           email: 'john@example.com')
+    
+    // With associations
+    book(meta: [key: 'isbn'], 
+         isbn: '978-1234567890',
+         title: 'Learning SeedMe',
+         author: [username: 'john.doe'])
+}
+----
+
+=== YAML Example
+
+Create a file `src/seed/Authors.yaml`:
+
+[source,yaml]
+----
+seed:
+  author:
+    - meta:
+        key: username
+      username: john.doe
+      name: John Doe
+      email: john@example.com
+  
+  book:
+    - meta:
+        key: isbn
+      isbn: '978-1234567890'
+      title: Learning SeedMe
+      author:
+        username: john.doe
+----
+
+== Documentation Sections
+
+=== link:groovy-dsl.html[Groovy DSL Reference]
+Learn the full capabilities of the Groovy DSL syntax including:
+
+* Meta properties and update control
+* Handling associations (belongsTo, hasMany)
+* Using closures for dynamic values
+* Enum support
+* Domain class property injection
+
+=== link:yaml-syntax.html[YAML Syntax Reference]
+Complete guide to YAML seed files with examples parallel to the Groovy DSL.
+
+=== link:advanced-usage.html[Advanced Usage]
+Advanced features and patterns:
+
+* Controlling seed execution order with dependencies
+* Using seeds in integration tests
+* Environment-specific configuration
+* Plugin seed management
+* Composite keys and complex associations
+
+== How SeedMe Works
+
+SeedMe maintains a checksum of each seed file in the database. When seeds run:
+
+1. SeedMe scans for `.groovy`, `.yaml`, and `.json` files in `src/seed/` and plugin seed directories
+2. It calculates a checksum for each file
+3. Only files that haven't been processed (or have changed) are executed
+4. Each seed entry is processed:
+   * The domain is looked up using the `meta` key property
+   * If found and `update` is not `false`, the record is updated
+   * If not found, a new record is created
+5. The checksum is stored to prevent re-processing
+
+This approach ensures seeds are idempotent and can safely run multiple times.
+
+== Getting Help
+
+* GitHub: https://github.com/wondrify/seed-me
+* Issues: https://github.com/wondrify/seed-me/issues
+
+== License
+
+SeedMe is open source software licensed under the Apache License 2.0.

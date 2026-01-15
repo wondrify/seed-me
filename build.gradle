@@ -19,7 +19,7 @@ ext {
 }
 
 subprojects { project ->
-    if (project.name != 'karman-docs') {
+    if (project.name != 'seed-me-docs') {
         publishedProjects << project.name
         apply plugin: 'java'
         apply plugin: 'org.apache.grails.gradle.grails-publish'

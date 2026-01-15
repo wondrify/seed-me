@@ -1,0 +1,414 @@
+= Groovy DSL Reference
+:toc: left
+:toclevels: 3
+:source-highlighter: coderay
+:icons: font
+
+== Overview
+
+The Groovy DSL is the native syntax for SeedMe seed files. It provides a concise, expressive way to define seed data with full Groovy language features available.
+
+== Basic Syntax
+
+Every seed file must start with a `seed` closure:
+
+[source,groovy]
+----
+seed = {
+    // Your seed definitions here
+}
+----
+
+Within the seed closure, each entry begins with the domain class name (in camelCase, matching the Artefact name):
+
+[source,groovy]
+----
+seed = {
+    author(name: 'John Doe', email: 'john@example.com')
+    book(title: 'Groovy in Action', isbn: '978-1935182446')
+}
+----
+
+== Meta Properties
+
+The `meta` property controls how SeedMe finds and updates records.
+
+=== Basic Meta Usage
+
+[source,groovy]
+----
+seed = {
+    author(meta: [key: 'username'], 
+           username: 'john.doe',
+           name: 'John Doe')
+}
+----
+
+The `key` property specifies which field(s) to use when looking up existing records. SeedMe will:
+
+1. Search for an existing record using the specified key
+2. Update the record if found
+3. Create a new record if not found
+
+=== Composite Keys
+
+Use multiple fields for the lookup key:
+
+[source,groovy]
+----
+seed = {
+    bookEdition(meta: [key: [isbn: '978-1935182446', edition: 2]],
+                isbn: '978-1935182446',
+                edition: 2,
+                title: 'Groovy in Action, Second Edition')
+}
+----
+
+=== Preventing Updates
+
+Set `update: false` to create records only if they don't exist:
+
+[source,groovy]
+----
+seed = {
+    author(meta: [key: 'username', update: false],
+           username: 'jane.smith',
+           name: 'Jane Smith')
+}
+----
+
+If the record exists, it will not be modified. This is useful for initial data that should never be overwritten.
+
+== Domain Associations
+
+=== BelongsTo Associations
+
+Reference associated domains by their lookup properties:
+
+[source,groovy]
+----
+seed = {
+    // Create the parent first
+    author(meta: [key: 'username'], 
+           username: 'john.doe',
+           name: 'John Doe')
+    
+    // Reference it in the child
+    book(meta: [key: 'isbn'],
+         isbn: '978-1234567890',
+         title: 'Learning SeedMe',
+         author: [username: 'john.doe'])  // Lookup by username
+}
+----
+
+The map `[username: 'john.doe']` tells SeedMe to find the Author domain with that username and assign it to the book's author property.
+
+=== HasMany Associations
+
+For one-to-many or many-to-many relationships, provide a list of lookup maps:
+
+[source,groovy]
+----
+seed = {
+    author(meta: [key: 'username'], username: 'john.doe', name: 'John Doe')
+    author(meta: [key: 'username'], username: 'jane.smith', name: 'Jane Smith')
+    
+    book(meta: [key: 'isbn'],
+         isbn: '978-1234567890',
+         title: 'SeedMe Collaboration',
+         authors: [
+             [username: 'john.doe'],
+             [username: 'jane.smith']
+         ])
+}
+----
+
+Given a domain:
+[source,groovy]
+----
+class Book {
+    String isbn
+    String title
+    static hasMany = [authors: Author]
+}
+----
+
+SeedMe will find both authors and add them to the book's authors collection.
+
+== Domain Class Property Injection
+
+For legacy schemas or non-standard associations, you can inject a property from another domain:
+
+[source,groovy]
+----
+seed = {
+    author(meta: [key: 'username'], username: 'john.doe', name: 'John Doe')
+    
+    // Assign author's ID to authorIdFk property
+    book(meta: [key: 'isbn'],
+         isbn: '978-1234567890',
+         title: 'Learning SeedMe',
+         authorIdFk: [domainClass: 'author', 
+                      meta: [property: 'id'], 
+                      username: 'john.doe'])
+}
+----
+
+This syntax:
+
+1. Finds the `Author` domain matching `username: 'john.doe'`
+2. Extracts the specified property (`id`)
+3. Assigns that value to `authorIdFk`
+
+The `meta: [property: 'id']` specifies which property of the found domain to use. You can specify any property:
+
+[source,groovy]
+----
+// Use author's database ID
+authorIdFk: [domainClass: 'author', meta: [property: 'id'], username: 'john.doe']
+
+// Use author's username directly
+authorName: [domainClass: 'author', meta: [property: 'username'], username: 'john.doe']
+
+// Use a custom property
+authorCode: [domainClass: 'author', meta: [property: 'code'], username: 'john.doe']
+----
+
+You can also use the `useId` shorthand when injecting the ID:
+
+[source,groovy]
+----
+seed = {
+    book(meta: [key: 'isbn'],
+         isbn: '978-1234567890',
+         authorIdFk: [meta: [useId: true], 
+                      code: 'author123',
+                      domainClass: 'author'])
+}
+----
+
+When `useId: true` is specified, SeedMe automatically uses the `id` property of the found domain.
+
+== Dynamic Values with Closures
+
+Use closures when you need to compute values at runtime:
+
+[source,groovy]
+----
+seed = {
+    book(meta: [key: 'isbn'],
+         isbn: '978-1234567890',
+         title: 'Dynamic Book',
+         status: { domain ->
+             // Access domain class constants/methods
+             return domain.PUBLISHED
+         })
+}
+----
+
+The closure receives the domain class instance as a parameter, allowing you to:
+
+* Access enum values or constants defined on the domain
+* Call static methods
+* Perform computations based on other seeded data
+
+Common use case with enums:
+[source,groovy]
+----
+seed = {
+    book(meta: [key: 'isbn'],
+         isbn: '978-1234567890',
+         title: 'Book Status Example',
+         status: { domain -> domain.ACTIVE },
+         publishState: { domain -> domain.PUBLISHED })
+}
+----
+
+== Enum Support
+
+SeedMe supports enum properties in two ways:
+
+=== Method 1: Direct Reference
+
+Import and use the enum directly:
+
+[source,groovy]
+----
+import com.example.BookStatus
+
+seed = {
+    book(meta: [key: 'isbn'],
+         isbn: '978-1234567890',
+         status: BookStatus.PUBLISHED)
+}
+----
+
+=== Method 2: String Value
+
+Provide the enum value as a string:
+
+[source,groovy]
+----
+seed = {
+    book(meta: [key: 'isbn'],
+         isbn: '978-1234567890',
+         status: 'PUBLISHED')  // String value
+}
+----
+
+SeedMe will automatically convert the string to the appropriate enum type based on the domain property definition.
+
+Given this domain:
+[source,groovy]
+----
+enum BookStatus {
+    DRAFT, PUBLISHED, ARCHIVED
+}
+
+class Book {
+    String isbn
+    String title
+    BookStatus status
+}
+----
+
+Both methods work identically.
+
+== Complex Examples
+
+=== Multiple Relationships
+
+[source,groovy]
+----
+seed = {
+    // Publishers
+    publisher(meta: [key: 'code'], code: 'oreilly', name: "O'Reilly Media")
+    
+    // Categories
+    category(meta: [key: 'code'], code: 'programming', name: 'Programming')
+    category(meta: [key: 'code'], code: 'groovy', name: 'Groovy')
+    
+    // Authors
+    author(meta: [key: 'username'], username: 'john.doe', name: 'John Doe')
+    author(meta: [key: 'username'], username: 'jane.smith', name: 'Jane Smith')
+    
+    // Book with multiple associations
+    book(meta: [key: 'isbn'],
+         isbn: '978-1935182446',
+         title: 'Groovy in Action',
+         publisher: [code: 'oreilly'],
+         authors: [
+             [username: 'john.doe'],
+             [username: 'jane.smith']
+         ],
+         categories: [
+             [code: 'programming'],
+             [code: 'groovy']
+         ],
+         status: 'PUBLISHED',
+         publishedDate: new Date('2015-01-01'))
+}
+----
+
+=== Computed Values and References
+
+[source,groovy]
+----
+seed = {
+    // System configuration
+    config(meta: [key: 'code'], 
+           code: 'app.version',
+           value: '1.0.0')
+    
+    // Device with complex properties
+    device(meta: [key: 'uniqueId'],
+           uniqueId: 'device-001',
+           name: 'Main Server',
+           deviceType: [code: 'server'],
+           account: [code: 'primary-account'],
+           serialNumber: 'SN-${System.currentTimeMillis()}',
+           status: { domain -> domain.ACTIVE },
+           configVersion: [domainClass: 'config',
+                          meta: [property: 'value'],
+                          code: 'app.version'])
+}
+----
+
+=== Preventing Updates on Reference Data
+
+[source,groovy]
+----
+seed = {
+    // Reference data - never update if exists
+    country(meta: [key: 'code', update: false],
+            code: 'US',
+            name: 'United States')
+    
+    country(meta: [key: 'code', update: false],
+            code: 'CA', 
+            name: 'Canada')
+    
+    // User data - update if changed
+    user(meta: [key: 'username'],
+         username: 'admin',
+         email: 'admin@example.com',
+         country: [code: 'US'])
+}
+----
+
+== Best Practices
+
+1. *Always use meta keys*: Specify a `key` for every domain to ensure proper updates
+2. *Order matters*: Define parent domains before children
+3. *Use meaningful keys*: Choose natural keys (username, code) over IDs when possible
+4. *Leverage closures*: Use closures for dynamic or computed values
+5. *Update control*: Use `update: false` for reference data that shouldn't change
+6. *Keep it readable*: Format your seed files with proper indentation
+7. *Document complex logic*: Add comments for non-obvious relationships
+
+== Common Patterns
+
+=== Hierarchical Data
+
+[source,groovy]
+----
+seed = {
+    // Parent
+    category(meta: [key: 'code'], code: 'books', name: 'Books', parent: null)
+    
+    // Children reference parent
+    category(meta: [key: 'code'], code: 'fiction', name: 'Fiction', 
+             parent: [code: 'books'])
+    category(meta: [key: 'code'], code: 'nonfiction', name: 'Non-Fiction',
+             parent: [code: 'books'])
+}
+----
+
+=== Lookup Tables
+
+[source,groovy]
+----
+seed = {
+    ['ADMIN', 'USER', 'GUEST'].each { roleName ->
+        role(meta: [key: 'name', update: false],
+             name: roleName,
+             description: "${roleName} role")
+    }
+}
+----
+
+=== Date-based Data
+
+[source,groovy]
+----
+import java.text.SimpleDateFormat
+
+def dateFormat = new SimpleDateFormat('yyyy-MM-dd')
+
+seed = {
+    event(meta: [key: 'code'],
+          code: 'launch-2025',
+          name: 'Product Launch',
+          eventDate: dateFormat.parse('2025-06-15'))
+}
+----

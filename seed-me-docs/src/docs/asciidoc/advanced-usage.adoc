@@ -1,0 +1,627 @@
+= Advanced Usage
+:toc: left
+:toclevels: 3
+:source-highlighter: coderay
+:icons: font
+
+== Controlling Seed Execution Order
+
+=== Dependency Ordering
+
+SeedMe supports explicit dependency ordering to control the sequence in which seed files are processed. This is essential when seeds depend on data from other seed files.
+
+==== Groovy DSL Dependencies
+
+[source,groovy]
+----
+seed = {
+    dependsOn(['Authors', 'Publishers'])
+    
+    book(meta: [key: 'isbn'],
+         isbn: '978-1234567890',
+         title: 'Dependent Book',
+         author: [username: 'john.doe'],
+         publisher: [code: 'oreilly'])
+}
+----
+
+==== YAML Dependencies
+
+[source,yaml]
+----
+dependsOn:
+  - Authors
+  - Publishers
+
+seed:
+  book:
+    - meta:
+        key: isbn
+      isbn: '978-1234567890'
+      title: Dependent Book
+      author:
+        username: john.doe
+      publisher:
+        code: oreilly
+----
+
+==== Cross-Plugin Dependencies
+
+When seed files exist with the same name across multiple plugins, qualify them with the plugin name:
+
+[source,groovy]
+----
+seed = {
+    dependsOn(['AuthorCore.Authors', 'PublisherCore.Publishers'])
+    
+    book(meta: [key: 'isbn'],
+         isbn: '978-1234567890',
+         title: 'Cross-Plugin Book')
+}
+----
+
+Or in YAML:
+
+[source,yaml]
+----
+dependsOn:
+  - AuthorCore.Authors
+  - PublisherCore.Publishers
+
+seed:
+  book:
+    - meta:
+        key: isbn
+      isbn: '978-1234567890'
+----
+
+== Using Seeds in Integration Tests
+
+SeedMe provides direct support for using the seed DSL in integration tests through the `seedService`.
+
+=== Basic Test Usage
+
+[source,groovy]
+----
+import grails.testing.mixin.integration.Integration
+import spock.lang.Specification
+
+@Integration
+class BookServiceSpec extends Specification {
+    
+    def seedService
+    def bookService
+    
+    def setup() {
+        seedService.installSeed {
+            author(meta: [key: 'username'],
+                   username: 'test.author',
+                   name: 'Test Author')
+            
+            book(meta: [key: 'isbn'],
+                 isbn: '978-TEST',
+                 title: 'Test Book',
+                 author: [username: 'test.author'])
+        }
+    }
+    
+    void "test book search"() {
+        when:
+        def results = bookService.searchBooks('Test')
+        
+        then:
+        results.size() == 1
+        results[0].title == 'Test Book'
+    }
+}
+----
+
+=== Testing with Multiple Seeds
+
+[source,groovy]
+----
+def setup() {
+    seedService.installSeed {
+        // Publishers
+        publisher(meta: [key: 'code'], code: 'test-pub', name: 'Test Publisher')
+        
+        // Authors
+        author(meta: [key: 'username'], username: 'author1', name: 'Author One')
+        author(meta: [key: 'username'], username: 'author2', name: 'Author Two')
+        
+        // Books
+        book(meta: [key: 'isbn'],
+             isbn: '978-TEST-001',
+             title: 'First Book',
+             author: [username: 'author1'],
+             publisher: [code: 'test-pub'])
+        
+        book(meta: [key: 'isbn'],
+             isbn: '978-TEST-002',
+             title: 'Second Book',
+             authors: [
+                 [username: 'author1'],
+                 [username: 'author2']
+             ],
+             publisher: [code: 'test-pub'])
+    }
+}
+----
+
+=== Cleanup Between Tests
+
+Seeds installed via `installSeed` are subject to normal transactional rollback in tests:
+
+[source,groovy]
+----
+@Rollback
+class BookServiceSpec extends Specification {
+    def seedService
+    
+    def setup() {
+        seedService.installSeed {
+            author(meta: [key: 'username'], username: 'test', name: 'Test')
+        }
+    }
+    
+    // Data is automatically rolled back after each test
+    void "test one"() {
+        expect:
+        Author.countByUsername('test') == 1
+    }
+    
+    void "test two"() {
+        // Previous test data was rolled back, setup runs again
+        expect:
+        Author.countByUsername('test') == 1
+    }
+}
+----
+
+== Configuration Options
+
+SeedMe can be configured in your application configuration file.
+
+=== application.groovy Configuration
+
+[source,groovy]
+----
+grails {
+    plugin {
+        seed {
+            // Automatically run seeds at application startup
+            autoSeed = false
+            
+            // Skip loading seeds from plugins
+            skipPlugins = false
+            
+            // List of plugin names to exclude from seed loading
+            excludedPlugins = ['somePlugin', 'anotherPlugin']
+            
+            // List of specific seed files to exclude (by name)
+            excludedSeedFiles = ['TestData', 'development/DebugSeeds']
+            
+            // Root directory for seed files (relative to project root)
+            root = 'src/seed'
+            
+            // Key name used for meta information in seed definitions
+            metaKey = 'meta'
+            
+            // Override the detected environment
+            environment = 'production'
+        }
+    }
+}
+----
+
+=== application.yml Configuration
+
+[source,yaml]
+----
+grails:
+  plugin:
+    seed:
+      autoSeed: false
+      skipPlugins: false
+      excludedPlugins:
+        - somePlugin
+        - anotherPlugin
+      excludedSeedFiles:
+        - TestData
+        - development/DebugSeeds
+      root: src/seed
+      metaKey: meta
+      environment: production
+----
+
+=== Runtime Configuration
+
+You can also enable auto-seed via system property:
+
+[source,bash]
+----
+grails run-app -DautoSeed=true
+----
+
+== Environment-Specific Seeds
+
+SeedMe automatically loads seeds based on your Grails environment.
+
+=== Directory Structure
+
+[source]
+----
+src/seed/
+├── CommonData.groovy       # Loaded in all environments
+├── ReferenceData.yaml      # Loaded in all environments
+├── development/            # Only loaded in development
+│   ├── TestUsers.groovy
+│   └── DebugData.yaml
+├── test/                   # Only loaded in test
+│   └── TestFixtures.groovy
+├── production/             # Only loaded in production
+│   └── InitialData.groovy
+└── env-staging/            # Alternative naming: env-{environment}
+    └── StagingData.groovy
+----
+
+=== Best Practices
+
+1. *Common data* goes in the root `src/seed/` directory
+2. *Environment-specific data* goes in named subdirectories
+3. Use `update: false` for production reference data
+4. Keep test fixtures in the `test/` directory
+
+=== Example Structure
+
+*src/seed/Countries.groovy* (all environments):
+[source,groovy]
+----
+seed = {
+    country(meta: [key: 'code', update: false], code: 'US', name: 'United States')
+    country(meta: [key: 'code', update: false], code: 'CA', name: 'Canada')
+}
+----
+
+*src/seed/development/TestUsers.groovy* (development only):
+[source,groovy]
+----
+seed = {
+    user(meta: [key: 'username'], username: 'dev.user', password: 'password', role: 'ADMIN')
+}
+----
+
+*src/seed/production/AdminUser.groovy* (production only):
+[source,groovy]
+----
+seed = {
+    user(meta: [key: 'username', update: false],
+         username: 'admin',
+         password: generateSecurePassword(),
+         role: 'ADMIN')
+}
+----
+
+== Plugin Seed Management
+
+=== Creating Seeds in Plugins
+
+Plugins can include their own seed data by placing seed files in `src/seed/`:
+
+[source]
+----
+my-plugin/
+└── src/
+    └── seed/
+        ├── PluginReferenceData.groovy
+        └── PluginConfig.yaml
+----
+
+These seeds will automatically be discovered and loaded when the plugin is included in an application.
+
+=== Excluding Plugin Seeds
+
+To exclude specific plugins from seed loading:
+
+[source,groovy]
+----
+grails.plugin.seed.excludedPlugins = ['myPlugin', 'anotherPlugin']
+----
+
+To skip all plugin seeds:
+
+[source,groovy]
+----
+grails.plugin.seed.skipPlugins = true
+----
+
+=== Plugin Seed Dependencies
+
+Plugin seeds can depend on other plugin seeds:
+
+[source,groovy]
+----
+// In my-application-plugin seed file
+seed = {
+    dependsOn(['CorePlugin.BaseData', 'AuthPlugin.Roles'])
+    
+    application(meta: [key: 'code'],
+                code: 'my-app',
+                role: [name: 'APP_USER'])
+}
+----
+
+== Working with Templates
+
+SeedMe reserves the `templates/` directory for large blob data or external file references.
+
+=== Template Directory
+
+[source]
+----
+src/seed/
+├── Documents.groovy
+└── templates/
+    ├── sample-document.pdf
+    ├── user-agreement.txt
+    └── logo.png
+----
+
+Files in the `templates/` directory are not processed as seed files but can be referenced from seed definitions:
+
+[source,groovy]
+----
+seed = {
+    document(meta: [key: 'code'],
+             code: 'user-agreement',
+             name: 'User Agreement',
+             content: new File('templates/user-agreement.txt').text)
+}
+----
+
+== Advanced Patterns
+
+=== Conditional Seeding
+
+Use Groovy logic to conditionally seed data:
+
+[source,groovy]
+----
+seed = {
+    // Only seed if environment variable is set
+    if (System.getenv('SEED_DEMO_DATA')) {
+        author(meta: [key: 'username'], username: 'demo', name: 'Demo User')
+    }
+    
+    // Seed different data based on configuration
+    def appMode = grailsApplication.config.getProperty('app.mode')
+    if (appMode == 'retail') {
+        category(meta: [key: 'code'], code: 'retail', name: 'Retail')
+    } else {
+        category(meta: [key: 'code'], code: 'wholesale', name: 'Wholesale')
+    }
+}
+----
+
+=== Bulk Data Generation
+
+[source,groovy]
+----
+seed = {
+    // Generate multiple records programmatically
+    (1..10).each { i ->
+        user(meta: [key: 'username'],
+             username: "user${i}",
+             name: "User ${i}",
+             email: "user${i}@example.com")
+    }
+    
+    // Generate with varied data
+    ['Fiction', 'Non-Fiction', 'Science', 'History'].each { categoryName ->
+        category(meta: [key: 'name', update: false],
+                 name: categoryName,
+                 code: categoryName.toLowerCase().replaceAll(' ', '-'))
+    }
+}
+----
+
+=== External Data Import
+
+[source,groovy]
+----
+import groovy.json.JsonSlurper
+
+seed = {
+    // Load data from external JSON file
+    def jsonSlurper = new JsonSlurper()
+    def data = jsonSlurper.parse(new File('data/authors.json'))
+    
+    data.authors.each { authorData ->
+        author(meta: [key: 'username'],
+               username: authorData.username,
+               name: authorData.name,
+               email: authorData.email)
+    }
+}
+----
+
+=== Composite Key Patterns
+
+When dealing with domains that have composite keys:
+
+[source,groovy]
+----
+seed = {
+    // Composite key on multiple fields
+    bookEdition(meta: [key: [isbn: '978-1234567890', edition: 1]],
+                isbn: '978-1234567890',
+                edition: 1,
+                title: 'First Edition',
+                publishYear: 2020)
+    
+    bookEdition(meta: [key: [isbn: '978-1234567890', edition: 2]],
+                isbn: '978-1234567890',
+                edition: 2,
+                title: 'Second Edition',
+                publishYear: 2022)
+}
+----
+
+In YAML:
+
+[source,yaml]
+----
+seed:
+  bookEdition:
+    - meta:
+        key:
+          isbn: '978-1234567890'
+          edition: 1
+      isbn: '978-1234567890'
+      edition: 1
+      title: First Edition
+      publishYear: 2020
+    
+    - meta:
+        key:
+          isbn: '978-1234567890'
+          edition: 2
+      isbn: '978-1234567890'
+      edition: 2
+      title: Second Edition
+      publishYear: 2022
+----
+
+== Manual Seed Execution
+
+=== Via Bootstrap
+
+[source,groovy]
+----
+class BootStrap {
+    def seedService
+    
+    def init = { servletContext ->
+        // Run all seeds
+        seedService.installSeedData()
+        
+        // Or selectively install specific seed data
+        if (Environment.current == Environment.DEVELOPMENT) {
+            seedService.installSeed {
+                user(meta: [key: 'username'], 
+                     username: 'dev.admin',
+                     password: 'password')
+            }
+        }
+    }
+}
+----
+
+=== Via Custom Command
+
+Create a custom Grails command to run seeds:
+
+[source,groovy]
+----
+// grails-app/commands/myapp/SeedCommand.groovy
+package myapp
+
+import grails.dev.commands.ApplicationCommand
+
+class SeedCommand implements ApplicationCommand {
+    def seedService
+    
+    boolean handle() {
+        println "Running seed data..."
+        seedService.installSeedData()
+        println "Seed data complete."
+        return true
+    }
+}
+----
+
+Run with:
+[source,bash]
+----
+grails seed
+----
+
+== Troubleshooting
+
+=== Debugging Seed Execution
+
+Enable debug logging:
+
+*logback.groovy*
+[source,groovy]
+----
+logger('seedme', DEBUG)
+----
+
+Add print statements in seed files:
+
+[source,groovy]
+----
+println "Starting author seeds..."
+seed = {
+    author(meta: [key: 'username'], username: 'john', name: 'John')
+    println "Author seeded: john"
+}
+----
+
+=== Common Issues
+
+==== Seeds Not Running
+
+1. Check `autoSeed` configuration
+2. Verify seed files are in `src/seed/` directory
+3. Check for syntax errors in seed files
+4. Ensure domain classes exist and are spelled correctly (camelCase)
+
+==== Association Not Found
+
+[source]
+----
+Error: Could not find Author with properties [username: 'john']
+----
+
+Solution: Ensure parent records are created first, or use `dependsOn`.
+
+==== Checksum Issues
+
+If you need to force re-run a seed after making changes, you can:
+
+1. Delete the checksum record from the database
+2. Modify the seed file (add a comment) to change its checksum
+3. Clear the seed checksum table
+
+== Performance Considerations
+
+=== Large Datasets
+
+For large datasets, consider:
+
+1. *Batch processing*: Process seeds in smaller chunks
+2. *Disable validation*: Use `domain.save(validate: false)` for bulk inserts
+3. *Transaction management*: Be aware of transaction boundaries
+4. *Index optimization*: Ensure lookup keys are indexed
+
+=== Seed File Organization
+
+1. Split large seed files into multiple smaller files
+2. Use dependencies to control order
+3. Group related seeds together
+4. Use environment-specific directories to avoid loading unnecessary data
+
+== Best Practices Summary
+
+1. *Always use meta keys*: Ensures proper update/create behavior
+2. *Order dependencies*: Use `dependsOn` for seed ordering
+3. *Environment-specific seeds*: Separate development from production data
+4. *Update control*: Use `update: false` for reference data
+5. *Natural keys*: Prefer business keys over database IDs
+6. *Test with seeds*: Use `seedService.installSeed` in integration tests
+7. *Document complex relationships*: Add comments for maintainability
+8. *Version control*: Commit seed files to source control
+9. *Security*: Never commit passwords or secrets in seed files
+10. *Validation*: Test seeds in a staging environment before production

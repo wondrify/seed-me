@@ -1,0 +1,598 @@
+= YAML Syntax Reference
+:toc: left
+:toclevels: 3
+:source-highlighter: coderay
+:icons: font
+
+== Overview
+
+SeedMe supports YAML as an alternative to the Groovy DSL. YAML syntax is ideal for configuration-style data and can be easier to read for non-developers or when integrating with external tools.
+
+== Basic Syntax
+
+Every YAML seed file must have a `seed` root key with domain definitions underneath:
+
+[source,yaml]
+----
+seed:
+  author:
+    - username: john.doe
+      name: John Doe
+      email: john@example.com
+  
+  book:
+    - isbn: '978-1935182446'
+      title: Groovy in Action
+----
+
+Each domain type is a key under `seed`, and each entry is an item in a list (denoted by `-`).
+
+== Meta Properties
+
+The `meta` property controls how SeedMe finds and updates records.
+
+=== Basic Meta Usage
+
+[source,yaml]
+----
+seed:
+  author:
+    - meta:
+        key: username
+      username: john.doe
+      name: John Doe
+----
+
+The `key` property specifies which field(s) to use when looking up existing records.
+
+=== Composite Keys
+
+Use multiple fields for the lookup key:
+
+[source,yaml]
+----
+seed:
+  bookEdition:
+    - meta:
+        key:
+          isbn: '978-1935182446'
+          edition: 2
+      isbn: '978-1935182446'
+      edition: 2
+      title: Groovy in Action, Second Edition
+----
+
+=== Preventing Updates
+
+Set `update: false` to create records only if they don't exist:
+
+[source,yaml]
+----
+seed:
+  author:
+    - meta:
+        key: username
+        update: false
+      username: jane.smith
+      name: Jane Smith
+----
+
+If the record exists, it will not be modified.
+
+== Domain Associations
+
+=== BelongsTo Associations
+
+Reference associated domains by their lookup properties:
+
+[source,yaml]
+----
+seed:
+  author:
+    - meta:
+        key: username
+      username: john.doe
+      name: John Doe
+  
+  book:
+    - meta:
+        key: isbn
+      isbn: '978-1234567890'
+      title: Learning SeedMe
+      author:
+        username: john.doe
+----
+
+The nested object under `author` tells SeedMe to find the Author domain with that username.
+
+=== HasMany Associations
+
+For one-to-many or many-to-many relationships, provide a list of lookup objects:
+
+[source,yaml]
+----
+seed:
+  author:
+    - meta:
+        key: username
+      username: john.doe
+      name: John Doe
+    
+    - meta:
+        key: username
+      username: jane.smith
+      name: Jane Smith
+  
+  book:
+    - meta:
+        key: isbn
+      isbn: '978-1234567890'
+      title: SeedMe Collaboration
+      authors:
+        - username: john.doe
+        - username: jane.smith
+----
+
+SeedMe will find both authors and add them to the book's authors collection.
+
+== Domain Class Property Injection
+
+For legacy schemas or non-standard associations, you can inject a property from another domain:
+
+[source,yaml]
+----
+seed:
+  author:
+    - meta:
+        key: username
+      username: john.doe
+      name: John Doe
+  
+  book:
+    - meta:
+        key: isbn
+      isbn: '978-1234567890'
+      title: Learning SeedMe
+      authorIdFk:
+        domainClass: author
+        meta:
+          property: id
+        username: john.doe
+----
+
+This syntax:
+
+1. Finds the `Author` domain matching `username: 'john.doe'`
+2. Extracts the specified property (`id`)
+3. Assigns that value to `authorIdFk`
+
+You can specify any property to inject:
+
+[source,yaml]
+----
+seed:
+  book:
+    - meta:
+        key: isbn
+      isbn: '978-1234567890'
+      # Use author's database ID
+      authorIdFk:
+        domainClass: author
+        meta:
+          property: id
+        username: john.doe
+      
+      # Use author's username directly
+      authorName:
+        domainClass: author
+        meta:
+          property: username
+        username: john.doe
+----
+
+You can also use the `useId` shorthand:
+
+[source,yaml]
+----
+seed:
+  book:
+    - meta:
+        key: isbn
+      isbn: '978-1234567890'
+      authorIdFk:
+        domainClass: author
+        meta:
+          useId: true
+        code: author123
+----
+
+When `useId: true` is specified, SeedMe automatically uses the `id` property of the found domain.
+
+== Enum Support
+
+Provide enum values as strings in YAML:
+
+[source,yaml]
+----
+seed:
+  book:
+    - meta:
+        key: isbn
+      isbn: '978-1234567890'
+      title: Published Book
+      status: PUBLISHED
+----
+
+SeedMe will automatically convert the string to the appropriate enum type based on the domain property definition.
+
+== Dependency Ordering
+
+Control the order in which seed files are processed using `dependsOn`:
+
+[source,yaml]
+----
+dependsOn:
+  - Authors
+  - Publishers
+
+seed:
+  book:
+    - meta:
+        key: isbn
+      isbn: '978-1234567890'
+      title: Dependent Book
+      author:
+        username: john.doe
+      publisher:
+        code: oreilly
+----
+
+The `Authors` and `Publishers` seed files will be processed before this file.
+
+=== Cross-Plugin Dependencies
+
+If seed files exist with the same name across plugins, specify the plugin name:
+
+[source,yaml]
+----
+dependsOn:
+  - AuthorPlugin.Authors
+  - PublisherPlugin.Publishers
+
+seed:
+  book:
+    - meta:
+        key: isbn
+      isbn: '978-1234567890'
+      title: Cross Plugin Book
+----
+
+== Complex Examples
+
+=== Multiple Relationships
+
+[source,yaml]
+----
+seed:
+  publisher:
+    - meta:
+        key: code
+      code: oreilly
+      name: O'Reilly Media
+  
+  category:
+    - meta:
+        key: code
+      code: programming
+      name: Programming
+    
+    - meta:
+        key: code
+      code: groovy
+      name: Groovy
+  
+  author:
+    - meta:
+        key: username
+      username: john.doe
+      name: John Doe
+    
+    - meta:
+        key: username
+      username: jane.smith
+      name: Jane Smith
+  
+  book:
+    - meta:
+        key: isbn
+      isbn: '978-1935182446'
+      title: Groovy in Action
+      publisher:
+        code: oreilly
+      authors:
+        - username: john.doe
+        - username: jane.smith
+      categories:
+        - code: programming
+        - code: groovy
+      status: PUBLISHED
+      publishedDate: '2015-01-01'
+----
+
+=== Device Configuration Example
+
+From the SeedMe README, here's a real-world example:
+
+[source,yaml]
+----
+dependsOn: []
+
+seed:
+  device:
+    - meta:
+        key: code
+        update: false
+      uniqueId: '5555'
+      account:
+        uniqueId: testaccount
+      name: voyagerTest1108
+      deviceType: ion
+      serialNumber: '5555'
+      imei: '0000000000000'
+----
+
+=== Reference Data Pattern
+
+[source,yaml]
+----
+seed:
+  country:
+    - meta:
+        key: code
+        update: false
+      code: US
+      name: United States
+    
+    - meta:
+        key: code
+        update: false
+      code: CA
+      name: Canada
+    
+    - meta:
+        key: code
+        update: false
+      code: MX
+      name: Mexico
+  
+  user:
+    - meta:
+        key: username
+      username: admin
+      email: admin@example.com
+      country:
+        code: US
+----
+
+=== Hierarchical Data
+
+[source,yaml]
+----
+seed:
+  category:
+    - meta:
+        key: code
+      code: books
+      name: Books
+      parent: null
+    
+    - meta:
+        key: code
+      code: fiction
+      name: Fiction
+      parent:
+        code: books
+    
+    - meta:
+        key: code
+      code: nonfiction
+      name: Non-Fiction
+      parent:
+        code: books
+----
+
+=== Complex Device with Property Injection
+
+[source,yaml]
+----
+seed:
+  config:
+    - meta:
+        key: code
+      code: app.version
+      value: 1.0.0
+  
+  deviceType:
+    - meta:
+        key: code
+      code: server
+      name: Server
+  
+  account:
+    - meta:
+        key: code
+      code: primary-account
+      name: Primary Account
+  
+  device:
+    - meta:
+        key: uniqueId
+      uniqueId: device-001
+      name: Main Server
+      deviceType:
+        code: server
+      account:
+        code: primary-account
+      serialNumber: SN-12345
+      status: ACTIVE
+      configVersion:
+        domainClass: config
+        meta:
+          property: value
+        code: app.version
+----
+
+== YAML vs Groovy DSL Comparison
+
+=== Feature Parity
+
+Most features work identically in both syntaxes:
+
+[cols="1,2,2"]
+|===
+|Feature |Groovy DSL |YAML
+
+|Meta keys
+|`meta: [key: 'code']`
+|`meta:\n  key: code`
+
+|Update control
+|`meta: [key: 'code', update: false]`
+|`meta:\n  key: code\n  update: false`
+
+|Associations
+|`author: [username: 'john']`
+|`author:\n  username: john`
+
+|HasMany
+|`authors: [[username: 'john']]`
+|`authors:\n  - username: john`
+
+|Property injection
+|`authorIdFk: [domainClass: 'author', meta: [property: 'id'], ...]`
+|`authorIdFk:\n  domainClass: author\n  meta:\n    property: id\n  ...`
+
+|Dependencies
+|`dependsOn(['Authors'])`
+|`dependsOn:\n  - Authors`
+|===
+
+=== When to Use YAML
+
+Use YAML when:
+
+* Working with non-Groovy developers
+* Integrating with external configuration systems
+* Prefer declarative, structured data formats
+* Need easy external tool parsing/generation
+
+=== When to Use Groovy DSL
+
+Use Groovy DSL when:
+
+* Need dynamic value computation (closures)
+* Working with complex logic or transformations
+* Prefer concise syntax
+* Want full Groovy language features (imports, methods, etc.)
+
+== Best Practices
+
+1. *Quote strings*: Always quote numeric strings like ISBNs, phone numbers, etc.
+2. *Consistent indentation*: Use 2 spaces for YAML indentation
+3. *Order matters*: Define parent domains before children
+4. *Use meaningful keys*: Choose natural keys over IDs
+5. *Update control*: Use `update: false` for reference data
+6. *Dependencies*: Explicitly declare dependencies for clarity
+7. *Comments*: Use `#` for comments to document complex relationships
+
+== Common Patterns
+
+=== Lookup Tables
+
+[source,yaml]
+----
+seed:
+  role:
+    - meta:
+        key: name
+        update: false
+      name: ADMIN
+      description: Administrator role
+    
+    - meta:
+        key: name
+        update: false
+      name: USER
+      description: Standard user role
+    
+    - meta:
+        key: name
+        update: false
+      name: GUEST
+      description: Guest role
+----
+
+=== Environment-Specific Data
+
+Create separate files for each environment:
+
+*src/seed/development/TestUsers.yaml*
+[source,yaml]
+----
+seed:
+  user:
+    - meta:
+        key: username
+      username: test.user
+      name: Test User
+      email: test@example.com
+----
+
+*src/seed/production/AdminUsers.yaml*
+[source,yaml]
+----
+seed:
+  user:
+    - meta:
+        key: username
+        update: false
+      username: admin
+      name: System Administrator
+      email: admin@production.com
+----
+
+=== Multi-level Associations
+
+[source,yaml]
+----
+seed:
+  organization:
+    - meta:
+        key: code
+      code: acme
+      name: ACME Corporation
+  
+  department:
+    - meta:
+        key: code
+      code: engineering
+      name: Engineering
+      organization:
+        code: acme
+  
+  team:
+    - meta:
+        key: code
+      code: backend
+      name: Backend Team
+      department:
+        code: engineering
+  
+  user:
+    - meta:
+        key: username
+      username: john.doe
+      name: John Doe
+      team:
+        code: backend
+----
