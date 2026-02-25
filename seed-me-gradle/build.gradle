@@ -9,6 +9,20 @@ ext {
     pomMavenPublicationName = 'pluginMaven'
 }
 
+gradlePlugin {
+    website = 'https://github.com/wondrify/seed-me'
+    vcsUrl = 'https://github.com/wondrify/seed-me'
+    plugins {
+        seedMePlugin {
+            id = 'seed-me-gradle'
+            displayName = 'Seed Me Gradle Plugin'
+            description = 'Gradle plugin for compiling seed data into Grails applications.'
+            implementationClass = 'seedme.gradle.SeedMePlugin'
+            tags.set(['grails', 'seed', 'data', 'groovy'])
+        }
+    }
+}
+
 dependencies {
     implementation gradleApi()
 
