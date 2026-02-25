@@ -14,7 +14,7 @@ gradlePlugin {
     vcsUrl = 'https://github.com/wondrify/seed-me'
     plugins {
         seedMePlugin {
-            id = 'seed-me-gradle'
+            id = 'cloud.wondrify.seed-me'
             displayName = 'Seed Me Gradle Plugin'
             description = 'Gradle plugin for compiling seed data into Grails applications.'
             implementationClass = 'seedme.gradle.SeedMePlugin'
