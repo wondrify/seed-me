@@ -3,6 +3,16 @@ SeedMe
 
 SeedMe is a simple plugin that was created to provide an easy way to add config and test data to the system.
 
+## Documentation
+
+For comprehensive documentation including Groovy DSL and YAML syntax references, see the [SeedMe Documentation](https://wondrify.github.io/seed-me/).
+
+### Quick Links
+- [Getting Started Guide](https://wondrify.github.io/seed-me/)
+- [Groovy DSL Reference](https://wondrify.github.io/seed-me/groovy-dsl.html)
+- [YAML Syntax Reference](https://wondrify.github.io/seed-me/yaml-syntax.html)
+- [Advanced Usage](https://wondrify.github.io/seed-me/advanced-usage.html)
+
 Release Notes
 -------------
 * __7.0.0__: Grails 7 Support
